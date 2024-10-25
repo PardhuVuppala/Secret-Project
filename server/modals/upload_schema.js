@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 
 const CloudinaryAssetSchema = new mongoose.Schema(
-    {
+    {   userid : { type :String, required: true },
+        password : {type:String, required: true },
         assetId: { type: String, unique: true, required: true },
         publicId: { type: String, unique: true, required: true },
         version: { type: Number, required: true },

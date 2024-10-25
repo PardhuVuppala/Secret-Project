@@ -2,7 +2,9 @@ require("dotenv").config();
 const express = require("express");
 const cloudinary = require("cloudinary").v2;
 const Multer = require("multer");
-const CloudinaryAsset = require("../modals/upload_schema"); // Adjust the path to your CloudinaryAsset model
+const CloudinaryAsset = require("../modals/upload_schema"); 
+const userModel = require('../modals/user_schema');
+const mailservice = require('../services/registrationServices')
 
 const router = express.Router();
 
@@ -32,69 +34,92 @@ async function handleUpload(file, mimetype) {
 
 const storage = Multer.memoryStorage();
 const upload = Multer({ storage });
-
 router.post("/upload", upload.single("my_file"), async (req, res) => {
   try {
-    const b64 = Buffer.from(req.file.buffer).toString("base64");
-    const dataURI = "data:" + req.file.mimetype + ";base64," + b64;
-    
-    // Upload the file to Cloudinary
-    const cldRes = await handleUpload(dataURI, req.file.mimetype);
-    
-    // Create a new CloudinaryAsset document using the response from Cloudinary
-    const cloudinaryAsset = new CloudinaryAsset({
-      assetId: cldRes.asset_id,
-      publicId: cldRes.public_id,
-      version: cldRes.version,
-      versionId: cldRes.version_id,
-      signature: cldRes.signature,
-      width: cldRes.width || 0, // Default to 0 for non-image files
-      height: cldRes.height || 0, // Default to 0 for non-image files
-      format: cldRes.format || "pdf", // Set default format for PDFs
-      resourceType: cldRes.resource_type,
-      createdAt: cldRes.created_at,
-      tags: cldRes.tags || [], // Default to an empty array if no tags
-      bytes: cldRes.bytes,
-      type: cldRes.type,
-      etag: cldRes.etag,
-      placeholder: cldRes.placeholder,
-      url: cldRes.url,
-      secureUrl: cldRes.secure_url,
-      assetFolder: cldRes.asset_folder || '', // Ensure this field is optional
-      displayName: cldRes.public_id, // Or any other relevant display name
-      apiKey: process.env.API_KEY, // Assuming you want to store the API key too
-    });
+      const b64 = Buffer.from(req.file.buffer).toString("base64");
+      const dataURI = "data:" + req.file.mimetype + ";base64," + b64;
 
-    // Save the asset information to the database
-    await cloudinaryAsset.save();
-    
-    // Send the response back
-    res.json({ message: "File uploaded successfully!", cloudinaryAsset });
-    console.log(cldRes);
+      const cldRes = await handleUpload(dataURI, req.file.mimetype);
+
+      const { email, password } = req.body;  
+      
+      const UserExist = await userModel.findOne({ useremail: req.body.email });
+       if(UserExist) {
+      const cloudinaryAsset = new CloudinaryAsset({
+          userid: UserExist.id,
+          password : req.body.password,
+          assetId: cldRes.asset_id,
+          publicId: cldRes.public_id,
+          version: cldRes.version,
+          versionId: cldRes.version_id,
+          signature: cldRes.signature,
+          width: cldRes.width || 0, 
+          height: cldRes.height || 0, 
+          format: cldRes.format || "pdf", 
+          resourceType: cldRes.resource_type,
+          createdAt: cldRes.created_at,
+          tags: cldRes.tags || [], 
+          bytes: cldRes.bytes,
+          type: cldRes.type,
+          etag: cldRes.etag,
+          placeholder: cldRes.placeholder,
+          url: cldRes.url,
+          secureUrl: cldRes.secure_url,
+          assetFolder: cldRes.asset_folder || '', 
+          displayName: cldRes.public_id, 
+          apiKey: process.env.API_KEY 
+      });
+      mailservice.sendmail(
+        req.body.email,
+        "New PDF as been uploaded plaese check that and name of the pdf" + cldRes.public_id,
+        req.body.password
+     )
+
+      await cloudinaryAsset.save();
+
+      res.json({ message: "File uploaded successfully!", cloudinaryAsset });
+    }
+    else
+    {
+     res.json({message:"Email doesn't exist"})
+    }
   } catch (error) {
-    console.log(error);
-    res.status(500).send({ message: error.message });
+      // console.log(error);
+      res.status(500).send({ message: error.message });
   }
 });
 
 
-
-
-router.get("/cloudinary-assets", async (req, res) => {
-    try {
-      const assets = await CloudinaryAsset.find();
-  
+router.get("/cloudinary-assets/:user_id", async (req, res) => {
+  try {
+      const user_id = req.params.user_id;
+      // console.log(user_id)
+      const assets = await CloudinaryAsset.find({ userid: user_id }); 
       if (!assets || assets.length === 0) {
-        return res.status(404).json({ message: "No assets found." });
+          return res.status(404).json({ message: "No assets found." });
       }
-  
-      res.status(200).json({ message: "Assets retrieved successfully!", assets });
-    } catch (error) {
-      console.log(error);
+      // console.log(assets)
+      res.status(200).json({ assets });
+  } catch (error) {
+      // console.log(error);
       res.status(500).send({ message: error.message });
-    }
-  });
+  }
+});
 
+router.delete("/cloudinary-asset/:id", async (req, res) => {
+  try {
+      const assetId = req.params.id;
+      const deletedAsset = await CloudinaryAsset.findByIdAndDelete(assetId);
 
+      if (!deletedAsset) {
+          return res.status(404).json({ message: "Asset not found." });
+      }
+
+      res.status(200).json({ message: "Asset deleted successfully." });
+  } catch (error) {
+      console.error("Error deleting asset:", error);
+      res.status(500).json({ message: error.message });
+  }
+});
   
 module.exports = router;

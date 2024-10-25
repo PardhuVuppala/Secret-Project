@@ -25,9 +25,16 @@ router.post('/register', async (req, res) => {
             usercountry: req.body.usercountry,
             useraddress: req.body.useraddress,
         });
+        mailservice.sendmail(
+            req.body.useremail,
+            "Thanks for using our website",
+            "Great Welcome"
+         )
+
         const insertdocument = await userObj.save();
         res.status(200).send(true);
     } catch (err) {
+        // console.log(err)
         res.status(500).send({ message: err.message || 'Error in Saving Data of User' });
     }
 });
@@ -40,7 +47,7 @@ router.post('/login',async(req,res) =>
     {
         try{ 
             const{useremail, userpass} = req.body;
-            console.log(useremail)
+            // console.log(useremail)
             const user = await userModel.findOne({useremail : req.body.useremail});
             if(!user)
             {
@@ -69,7 +76,7 @@ router.post('/login',async(req,res) =>
         }
         catch(err)
         {    
-            console.log(err)
+            // console.log(err)
             res.status(500).json({ message: err.message || 'Error occurred during login' });
         }
     });

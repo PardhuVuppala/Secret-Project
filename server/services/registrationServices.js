@@ -8,13 +8,13 @@ function sendmail(receiveremailid, subjectline, emailbody) {
             port: 465, 
             secure: true, 
             auth: {
-                user: 'pardhuvuppala', 
-                pass: 'vrglfejbdissytzl'
+                user: 'pardhuvuppala890', 
+                pass: 'qjscfvdybdfhfcev'
             }
         });
 
         let mailOptions = {
-            from: 'Recipe Management Site',
+            from: 'Secret Files Website',
             to: receiveremailid, 
             subject: subjectline,
             text: emailbody

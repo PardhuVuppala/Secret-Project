@@ -1,14 +1,21 @@
 import React, { useEffect, useState } from 'react';
+import Cookies from 'js-cookie';
+import axios from 'axios'
+import { useNavigate } from 'react-router-dom';
 
 const AssetViewer = () => {
     const [assets, setAssets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [passwords, setPasswords] = useState({}); 
+    const Navigate = useNavigate();
+
 
     // Function to fetch assets from the backend
     const fetchAssets = async () => {
         try {
-            const response = await fetch('http://localhost:4500/image/cloudinary-assets'); // Update with your API endpoint
+            const user_id = Cookies.get("user_id");
+            const response = await fetch(`http://localhost:4500/image/cloudinary-assets/${user_id}`);
             const data = await response.json();
 
             if (!response.ok) {
@@ -25,24 +32,54 @@ const AssetViewer = () => {
 
     // Fetch assets on component mount
     useEffect(() => {
+        const token = Cookies.get("token")
+         if (token) {
+                 axios
+                    .get("http://localhost:4500/user/is-verify", {
+                    headers: {
+                        "Content-Type": "application/json",
+                        token: token,
+                    },
+                    })
+                    .then((response) => {
+                    })
+                    .catch((error) => {
+                    console.error(error);
+                    Navigate("/");
+                    });
+                } else {
+                Navigate("/");
+                }
         fetchAssets();
     }, []);
 
-    // Function to trigger file download
-    const downloadFile = (url, displayName) => {
-        fetch(url)
-            .then(response => response.blob())
-            .then(blob => {
-                const blobUrl = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = blobUrl;
-                a.download = displayName; // Suggest the filename for download
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(blobUrl); // Free up memory
-            })
-            .catch(err => console.error('Error downloading file:', err));
+    const handlePasswordChange = (assetId, value) => {
+        setPasswords(prev => ({ ...prev, [assetId]: value }));
+    };
+
+    const downloadFile = async (url, displayName, assetId) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = displayName; 
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(blobUrl);
+
+            // Delete asset from backend
+            await fetch(`http://localhost:4500/image/cloudinary-asset/${assetId}`, {
+                method: 'DELETE'
+            });
+
+            // Remove asset from local state after deletion
+            setAssets(prevAssets => prevAssets.filter(asset => asset._id !== assetId));
+        } catch (err) {
+            console.error('Error downloading or deleting file:', err);
+        }
     };
 
     // Render loading state, error state, or assets
@@ -67,15 +104,30 @@ const AssetViewer = () => {
                         ) : (
                             <div>
                                 <p className="font-bold mb-2">{asset.displayName} (PDF)</p>
-                                {/* Removed the iframe for PDF display */}
                             </div>
                         )}
-                        <button 
-                            className="w-full mt-2 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-500 transition-colors duration-300" 
-                            onClick={() => downloadFile(asset.secureUrl, asset.displayName + (asset.format === 'pdf' ? '.pdf' : ''))} // Trigger download
-                        >
-                            Download
-                        </button>
+                        
+                        <input
+                            type="password"
+                            placeholder="Enter password"
+                            value={passwords[asset._id] || ""}
+                            onChange={(e) => handlePasswordChange(asset._id, e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded-md mb-2"
+                        />
+
+                        {/* Show download button only if the password matches */}
+                        {passwords[asset._id] === asset.password ? (
+                            <button 
+                                className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-500 transition-colors duration-300"
+                                onClick={() => downloadFile(asset.secureUrl, asset.displayName + (asset.format === 'pdf' ? '.pdf' : ''), asset._id)} 
+                            >
+                                Download
+                            </button>
+                        ) : (
+                            passwords[asset._id] && (
+                                <p className="text-red-500 text-center">Incorrect password</p>
+                            )
+                        )}
                     </div>
                 ))}
             </div>
